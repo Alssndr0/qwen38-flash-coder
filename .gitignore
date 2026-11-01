@@ -1,0 +1,6 @@
+models/
+cache/
+logs/
+.release/
+.assets/
+__pycache__/

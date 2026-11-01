@@ -1,0 +1,10 @@
+-v /home/alessandro/projects/dflash2-eval/models/Qwen3.8-Flash-Next-DFlash2:/dflash2:ro
+-v /home/alessandro/projects/dflash2-eval/patches/v53/config.py:/usr/local/lib/python3.12/dist-packages/vllm/model_executor/models/config.py:ro
+-v /home/alessandro/projects/dflash2-eval/patches/v53/dflash2_speculator.py:/usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/spec_decode/dflash2/speculator.py:ro
+-v /home/alessandro/projects/dflash2-eval/assets/dfl2_basis_card_r256.pt:/dfl2_basis.pt:ro
+-v /home/alessandro/projects/fp4local-az-eval/patches/v54/model.py:/usr/local/lib/python3.12/dist-packages/vllm/models/qwen4_exp/nvidia/model.py:ro
+-v /home/alessandro/projects/fp4local-az-eval/patches/v54/low_latency_gemm.py:/usr/local/lib/python3.12/dist-packages/vllm/models/qwen4_exp/nvidia/low_latency_gemm.py:ro
+-v /home/alessandro/projects/fp4local-az-eval/patches/dfl2_opt_fg2.py:/usr/local/lib/python3.12/dist-packages/dfl2_opt.py:ro
+-v /home/alessandro/projects/qwen38-fp4local/patches-v53/base_loader.py:/usr/local/lib/python3.12/dist-packages/vllm/model_executor/model_loader/base_loader.py:ro
+-v /home/alessandro/projects/fp4local-az-eval/patches/mbx_opt_quant_cal.py:/usr/local/lib/python3.12/dist-packages/mbx_opt_quant.py:ro
+-v /home/alessandro/projects/fp4local-az-eval/assets/vocab_keep_latin.json:/vocab_keep.json:ro

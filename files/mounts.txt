@@ -1,0 +1,11 @@
+# kit file (relative to the kit)          ->  path in the image (mounted read-only)
+files/dflash2/config.py                   /usr/local/lib/python3.12/dist-packages/vllm/model_executor/models/config.py
+files/dflash2/speculator.py               /usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/spec_decode/dflash2/speculator.py
+files/dfl2_basis_card_r256.pt             /dfl2_basis.pt
+files/v54/model.py                        /usr/local/lib/python3.12/dist-packages/vllm/models/qwen4_exp/nvidia/model.py
+files/v54/low_latency_gemm.py             /usr/local/lib/python3.12/dist-packages/vllm/models/qwen4_exp/nvidia/low_latency_gemm.py
+files/dfl2_opt.py                         /usr/local/lib/python3.12/dist-packages/dfl2_opt.py
+files/base_loader.py                      /usr/local/lib/python3.12/dist-packages/vllm/model_executor/model_loader/base_loader.py
+files/mbx_opt_quant.py                    /usr/local/lib/python3.12/dist-packages/mbx_opt_quant.py
+files/vocab_keep_latin.json               /vocab_keep.json
+models/Qwen3.8-Flash-Next-DFlash2         /dflash2
