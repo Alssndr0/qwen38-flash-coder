@@ -1,0 +1,20 @@
+Licensed by NVIDIA Corporation under the NVIDIA Open Model Agreement.
+
+Weights. The release assets (shard 1 of the checkpoint, its weight index, the INT8 GPTQ codes) and model/config.json
+are derived from NVIDIA's Qwen3.8-Flash-Next-FP4-Local (https://huggingface.co/nvidia/Qwen3.8-Flash-Next-FP4-Local) as
+modified by azampatti (https://huggingface.co/azampatti/Qwen3.8-Flash-Next-FP4-Local-AZ: top-5 routing, replaced
+shared expert). They are governed by the NVIDIA Open Model Agreement (LICENSE.NVIDIA-Open-Model-Agreement.txt), and the
+base model Qwen3.8-Flash-Next by the Qwen Community License 1.0 (LICENSE.Qwen-Community-License-1.0.txt). Changes made
+here: the linear-attention (GDN) in_proj / out_proj weights converted from MXFP8 to NVFP4 with GPTQ (shard 1, index,
+config), and INT8 GPTQ codes for the hyper-connection layers. files/vocab_keep_latin.json lists rows of the model's
+vocabulary; files/dfl2_basis_card_r256.pt holds principal directions of the DFlash2 drafter's hidden states.
+
+Code. serve.sh, stop.sh, view.sh, tune-host.sh and recipe.yaml come from myllmbox/qwen38-flash-next-recipe
+(https://github.com/myllmbox/qwen38-flash-next-recipe, by myllmbox and bilikas) and remain under their authors' terms;
+the changes made here (marked [coder] in recipe.yaml; RECIPE / EXTRA_DOCKER / DRY_RUN and the log path in serve.sh) are
+offered under the Apache License 2.0 (LICENSE). files/ holds modified copies of files from the
+myllmbox/qwen38-flash-next-vllm images, several of which come from vLLM (Apache-2.0). Everything else (run.sh,
+README.md, build/, files/mounts.txt, model/shard1.sha256, assets.sha256) is licensed under the Apache License 2.0.
+
+The DFlash2 drafter (incoai/Qwen3.8-Flash-Next-DFlash2, Apache-2.0) and the AZ checkpoint are downloaded by run.sh,
+not included.

@@ -4,7 +4,7 @@
 #   ./run.sh                 fetch if needed, assemble, serve (replaces any running qwen38-flash-next container)
 #   PREPARE_ONLY=1 ./run.sh  fetch and assemble only; touches no container
 #   DRY_RUN=1 ./run.sh       print the docker command; downloads and changes nothing
-# Needs: docker with the NVIDIA runtime, gh (logged in, for this repo's release assets), ~110 GB of disk.
+# Needs: docker with the NVIDIA runtime, curl, ~110 GB of disk.
 set -euo pipefail
 cd "$(dirname "$0")"
 K="$(pwd)"
@@ -46,10 +46,13 @@ fi
 # 3. this repo's release assets (the 4-bit GDN shard in parts, its weight index, the INT8 GPTQ codes), sha256-checked
 if ! (cd .assets && sha256sum --quiet -c ../assets.sha256 2>/dev/null); then
   if need "release assets"; then
-    command -v gh >/dev/null || { echo "✗ gh is needed for the release assets (or download them from $RELEASE_REPO, tag $RELEASE_TAG, into .assets/)"; exit 1; }
-    echo "· fetching release $RELEASE_TAG assets -> .assets/"
-    gh release download "$RELEASE_TAG" -R "$RELEASE_REPO" -D .assets --skip-existing
-    (cd .assets && sha256sum --quiet -c ../assets.sha256) || { echo "✗ release assets fail their sha256 (see above)"; exit 1; }
+    echo "· fetching release $RELEASE_TAG assets -> .assets/ (4.7 GB, resumable)"
+    while read -r sum name; do
+      (cd .assets && echo "$sum  $name" | sha256sum --quiet -c 2>/dev/null) && continue
+      curl -fL --retry 5 -C - -o ".assets/$name" "https://github.com/$RELEASE_REPO/releases/download/$RELEASE_TAG/$name" \
+        || { echo "✗ download of $name failed (rerun to resume)"; exit 1; }
+    done < assets.sha256
+    (cd .assets && sha256sum --quiet -c ../assets.sha256) || { echo "✗ release assets fail their sha256: delete the bad file in .assets/ and rerun"; exit 1; }
   fi
 fi
 

@@ -13,13 +13,13 @@ two halves) is still running; numbers below are what is measured so far.
 On a DGX Spark with Docker and the NVIDIA container runtime (`./tune-host.sh` once per box):
 
 ```bash
-gh repo clone Alssndr0/qwen38-flash-coder
+git clone https://github.com/Alssndr0/qwen38-flash-coder.git
 cd qwen38-flash-coder
 ./run.sh
 ```
 
 The first run downloads the AZ checkpoint at the measured revision (about 100 GB) and the DFlash2 drafter (1.2 GB,
-sha256-checked), fetches this repo's release assets with `gh` (4.7 GB, sha256-checked), assembles the checkpoint
+sha256-checked), downloads this repo's release assets (4.7 GB, sha256-checked), assembles the checkpoint
 (AZ's files are hard-linked, only shard 1 is new), prepares the n-gram table map (once), and serves an
 OpenAI-compatible API on `http://127.0.0.1:8000/v1` as `Qwen/Qwen3.8-Flash-Next`. Later boots take about 4 minutes.
 
@@ -102,5 +102,8 @@ The paths in `build/` are the ones of the original workspace, kept as a record.
 
 ## License
 
-The weights derive from NVIDIA's Qwen3.8-Flash-Next-FP4-Local and azampatti's AZ checkpoint and follow their license
-(NVIDIA Open Model Agreement).
+Code: Apache License 2.0 ([LICENSE](LICENSE)), except the files taken from myllmbox's recipe, which stay under their
+authors' terms. Weights (the release assets and `model/config.json`): derived from NVIDIA's Qwen3.8-Flash-Next-FP4-Local
+via azampatti's AZ checkpoint, under the NVIDIA Open Model Agreement
+([LICENSE.NVIDIA-Open-Model-Agreement.txt](LICENSE.NVIDIA-Open-Model-Agreement.txt)) and the Qwen Community License 1.0
+([LICENSE.Qwen-Community-License-1.0.txt](LICENSE.Qwen-Community-License-1.0.txt)). Details in [NOTICE](NOTICE).
