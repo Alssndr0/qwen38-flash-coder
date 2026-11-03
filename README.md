@@ -1,14 +1,6 @@
 # Qwen Flash Coder: v4gdnq
 
-Qwen3.8-Flash-Next tuned for English agentic coding on one DGX Spark. This is the fastest stack of the 2026-10-30
-search that has kept full quality so far: about 9 % faster per decode step than the previous best (f5c, itself 19 %
-above the hibrid48 production serve on the full agentic replay), with the same results on hard, post-training coding
-tasks.
-
-Status: **candidate**. The hard-task comparison (fresh bug-fix tasks, SWE-bench Multilingual, code review;
-two halves) is paused after half A, where no configuration differed significantly; numbers below are what is measured
-so far. Since then the kit also keeps several agents smooth at once (layer-sliced prefill) and runs the routed experts
-on its own CUDA kernel (prefill about 4.5 % faster, decode unchanged or faster); both are on by default.
+Qwen3.8-Flash-Next tuned for coding in English.
 
 ## Run it
 
