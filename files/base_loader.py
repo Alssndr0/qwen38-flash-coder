@@ -85,6 +85,12 @@ class BaseModelLoader(ABC):
                 )
 
             logger.debug("Loading weights on %s ...", load_device)
+            # local: routed experts on the kit kernel (mbx_moek; no-op unless MBX_MOEK=1); installed before the
+            # weights are processed, because it wraps the Marlin MoE preparation
+            import os as _mbx_os
+            if _mbx_os.environ.get("MBX_MOEK") == "1":
+                import mbx_moek as _mbx_moek
+                _mbx_moek.install()
             self.load_weights(model, model_config)
 
             # Release transient tensors held by PyTorch's caching allocator
@@ -114,6 +120,16 @@ class BaseModelLoader(ABC):
             if _mbx_os.environ.get("MBX_INT8_GPTQ") or _mbx_os.environ.get("MBX_INT8_CALIB_DIR"):
                 import mbx_opt_quant as _mbx_oq
                 _mbx_oq.target_loaded(model, vllm_config, model_config)
+            # local: prefill-size GDN projections on the MXFP8 originals (mbx_gdn8; no-op unless MBX_GDN8 is set)
+            if _mbx_os.environ.get("MBX_GDN8"):
+                import mbx_gdn8 as _mbx_g8
+                _mbx_g8.target_loaded(model, vllm_config, model_config)
+            if _mbx_os.environ.get("MBX_MOEK") == "1":
+                _mbx_moek.report()
+            # local: Marlin MoE row tile for prefill-size batches (mbx_moe; no-op unless MBX_MOE_BM or MBX_MOE_LIVE)
+            if _mbx_os.environ.get("MBX_MOE_BM") or _mbx_os.environ.get("MBX_MOE_LIVE"):
+                import mbx_moe as _mbx_moe
+                _mbx_moe.install()
 
             gc.collect()
             torch.accelerator.empty_cache()

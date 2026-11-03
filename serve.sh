@@ -243,6 +243,26 @@ MD_MODE="$(rkey mtp_depth mode)"; MD_MIN="$(rkey mtp_depth min)"; MD_WIN="$(rkey
 MD_UP="$(lst "$(rkey mtp_depth promote)")"; MD_DN="$(lst "$(rkey mtp_depth demote)")"; MD_LOG="$(rkey mtp_depth log)"
 [ -n "${DRY_RUN:-}" ] || printf '{"mode": "%s", "min": %s, "window": %s, "promote": [%s], "demote": [%s], "log": %s}\n' \
   "${MD_MODE:-off}" "${MD_MIN:-3}" "${MD_WIN:-48}" "${MD_UP:-60,45}" "${MD_DN:-25,15}" "${MD_LOG:-false}" > "$CACHE_ABS/mbx-depth.json"
+# [smooth] prefill policy (recipe.yaml smooth: section) → cache/mbx-smooth.json, read live by mbx_sched.SmoothScheduler
+if [ -z "${DRY_RUN:-}" ] && [ -n "$(rsection smooth | head -1)" ]; then
+  rsection smooth | python3 -c '
+import json, sys
+d = {}
+for line in sys.stdin:
+    k, _, v = line.rstrip("\n").partition("\t")
+    if v in ("true", "false"):
+        d[k] = v == "true"
+    else:
+        try:
+            d[k] = int(v)
+        except ValueError:
+            try:
+                d[k] = float(v)
+            except ValueError:
+                d[k] = v
+print(json.dumps(d))' > "$CACHE_ABS/mbx-smooth.json"
+  echo "  · prefill policy: $(cat "$CACHE_ABS/mbx-smooth.json"); edit cache/mbx-smooth.json to change it live"
+fi
 [ "${MD_MODE:-off}" = dynamic ] && echo "  · draft depth: dynamic (min ${MD_MIN:-3}, window ${MD_WIN:-48}, promote ${MD_UP:-60,45}, demote ${MD_DN:-25,15}) — edit cache/mbx-depth.json to change it live"
 echo "· starting $NAME  ($IMAGE)  on :$PORT — healthy in ~7 min; the very first boot on a box also prepares the table map and compiles kernels (~15 min, once)"
 DOCKER_CMD=(docker run -d --name "$NAME" --gpus all --ipc=host \
@@ -292,6 +312,33 @@ ans = " ".join((m.get("content") or "").split())
 ok = bool(re.search(r"\b(OAK|OK)\b", ans.upper()))   # OAK (middle A) or OK (no middle letter)
 print(f"{'✓' if ok else '⚠'} warm-up: {time.time() - t0:.1f} s · {ans[:90]}")
 PY
+    # [smooth] warm the sliced-prefill path (its first runs JIT-compile kernels): a few prompts forced through it
+    if grep -q '"mode": "slice"' "$CACHE_ABS/mbx-smooth.json" 2>/dev/null; then
+      python3 - "$WPORT" "$WMODEL" "$CACHE_ABS/mbx-smooth.json" <<'PY' || echo "· sliced-prefill warm-up skipped"
+import json, os, sys, time, urllib.request, uuid
+port, model, live = sys.argv[1:4]
+orig = open(live).read()
+def put(text):
+    with open(live + ".tmp", "w") as f:
+        f.write(text)
+    os.replace(live + ".tmp", live)
+cfg = json.loads(orig)
+cfg["force"] = 1
+put(json.dumps(cfg))
+time.sleep(1.5)
+t0 = time.time()
+try:
+    for n in (60, 400, 1500, 5000):
+        body = {"model": model, "max_tokens": 4, "temperature": 0.0, "chat_template_kwargs": {"enable_thinking": False},
+                "messages": [{"role": "user", "content": uuid.uuid4().hex + " " + "lorem ipsum " * n + "Reply OK."}]}
+        req = urllib.request.Request(f"http://127.0.0.1:{port}/v1/chat/completions", data=json.dumps(body).encode(),
+                                     headers={"Content-Type": "application/json"})
+        json.load(urllib.request.urlopen(req, timeout=300))
+finally:
+    put(orig)
+print(f"✓ sliced-prefill warm-up: {time.time() - t0:.1f} s")
+PY
+    fi
     echo
     echo "──────────────────────────────────────────────────────────"
     echo "✓ server booted — OpenAI-compatible API is live"

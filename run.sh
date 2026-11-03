@@ -85,4 +85,4 @@ while read -r src dst; do
   case "$src" in ''|'#'*) continue;; esac
   EXTRA+=" -v $K/$src:$dst:ro"
 done < files/mounts.txt
-RECIPE="${RECIPE:-recipe.yaml}" EXTRA_DOCKER="$EXTRA" exec ./serve.sh
+RECIPE="${RECIPE:-recipe.yaml}" EXTRA_DOCKER="$EXTRA ${EXTRA_DOCKER:-}" exec ./serve.sh

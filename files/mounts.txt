@@ -9,3 +9,9 @@ files/base_loader.py                      /usr/local/lib/python3.12/dist-package
 files/mbx_opt_quant.py                    /usr/local/lib/python3.12/dist-packages/mbx_opt_quant.py
 files/vocab_keep_latin.json               /vocab_keep.json
 models/Qwen3.8-Flash-Next-DFlash2         /dflash2
+files/mbx_sched.py                        /usr/local/lib/python3.12/dist-packages/mbx_sched.py
+files/mbx_sidecar.py                      /usr/local/lib/python3.12/dist-packages/mbx_sidecar.py
+files/mbx_gdn8.py                         /usr/local/lib/python3.12/dist-packages/mbx_gdn8.py
+files/mbx_moe.py                          /usr/local/lib/python3.12/dist-packages/mbx_moe.py
+files/mbx_moek.py                         /usr/local/lib/python3.12/dist-packages/mbx_moek.py
+files/mbx_moek.cu                         /usr/local/lib/python3.12/dist-packages/mbx_moek.cu

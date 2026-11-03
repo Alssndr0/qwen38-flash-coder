@@ -13,6 +13,7 @@ from vllm import envs
 from vllm.config import VllmConfig
 from vllm.distributed import get_pp_group
 from vllm.forward_context import get_forward_context, is_forward_context_available
+from vllm.logger import init_logger
 from vllm.model_executor.layers.fused_moe.utils import (
     is_model_fused_shared_expert_compatible,
 )
@@ -94,6 +95,17 @@ from .qsa import Qwen4ExpQSAAttention
 # Transformers v5.18 renamed `qwen_sparse_attention` to `indexed_attention`
 # TODO: Delete qwen_... once Transformers 5.18.0 is the minimum required version.
 _QSA_LAYER_TYPES = ("qwen_sparse_attention", "indexed_attention")
+
+# [coder] layer-sliced prefill (files/mbx_sidecar.py): the worker runs a newcomer's prompt a few layers per step.
+_MBX_SLICE = None
+if __import__("os").environ.get("MBX_SIDECAR", "0") == "1":
+    try:
+        import mbx_sidecar as _mbx_sidecar
+
+        _mbx_sidecar.install()
+        _MBX_SLICE = _mbx_sidecar.SLICE
+    except Exception as _e:  # the serve still works without it
+        init_logger(__name__).warning("mbx_sidecar not installed: %s", _e)
 
 
 def is_hc_sequence_parallel_enabled(vllm_config: VllmConfig) -> bool:
@@ -528,6 +540,8 @@ class Qwen4ExpModel(nn.Module, EagleModelMixin):
         ngram_context: torch.Tensor | None = None,
         deepstack_input_embeds: IntermediateTensors | None = None,
     ) -> torch.Tensor | IntermediateTensors:
+        if _MBX_SLICE is not None and _MBX_SLICE["on"]:
+            return self._forward_slice(input_ids, positions, query_start_loc, ngram_context)
         if get_pp_group().is_first_rank:
             if inputs_embeds is not None:
                 hidden_states = inputs_embeds
@@ -665,6 +679,70 @@ class Qwen4ExpModel(nn.Module, EagleModelMixin):
             self._mtp_hidden_buffer[:num_tokens].copy_(multi_hidden)
         if aux_hidden_states:
             return sample_hidden_states, aux_hidden_states
+        return sample_hidden_states
+
+    def _forward_slice(
+        self,
+        input_ids: torch.Tensor,
+        positions: torch.Tensor,
+        query_start_loc: torch.Tensor | None,
+        ngram_context: torch.Tensor | None,
+    ):
+        """[coder] One slice of a layer-sliced prefill: run layers [lo, hi) of a one-request prefill chunk. The HC
+        carry and the DFlash2 capture states stay in the stash between slices; the last slice returns the real
+        hidden states (the earlier ones return zeros nobody reads). Single GPU only (no PP/SP)."""
+        sl = _MBX_SLICE
+        lo, hi, st = sl["lo"], sl["hi"], sl["stash"]
+        n_layers = self.end_layer
+        if lo == 0:
+            hidden_states = self.embed_input_ids(input_ids).repeat(1, self.config.hc_count)
+            block_output = injection = None
+            st["aux"] = {}
+        else:
+            hidden_states, block_output, injection = st["h"], st["bo"], st["inj"]
+        self._start_layer_ple_prefetch(self.layers[lo], input_ids, query_start_loc, ngram_context)
+        for layer_idx in range(lo, hi):
+            layer = self.layers[layer_idx]
+            if layer_idx + 1 < hi:
+                self._start_layer_ple_prefetch(self.layers[layer_idx + 1], input_ids, query_start_loc, ngram_context)
+            hidden_states, block_output, injection = layer(
+                hidden_states=hidden_states,
+                prev_block_output=block_output,
+                prev_injection=injection,
+                positions=positions,
+                input_ids=input_ids,
+                query_start_loc=query_start_loc,
+                ngram_context=ngram_context,
+            )
+            if (layer_idx + 1) in self.aux_hidden_state_layers:
+                completed = (
+                    layer.mlp_hyper_connection.combine(hidden_states, block_output, injection)
+                    if block_output is not None
+                    else hidden_states
+                )
+                st["aux"][layer_idx + 1] = (
+                    completed.unflatten(-1, (self.config.hc_count, self.config.hidden_size)).mean(dim=-2).clone()
+                )
+        if hi < n_layers:
+            st["h"] = hidden_states.clone()
+            st["bo"] = block_output.clone() if block_output is not None else None
+            st["inj"] = injection.clone() if injection is not None else None
+            dummy = torch.zeros(
+                positions.shape[-1], self.config.hidden_size, dtype=hidden_states.dtype, device=hidden_states.device
+            )
+            if self.aux_hidden_state_layers:
+                return dummy, [dummy] * len(self.aux_hidden_state_layers)
+            return dummy
+        final_mixer = self.hyper_connection_mixer
+        assert final_mixer is not None
+        multi_hidden, sample_hidden_states, _ = final_mixer.combine_and_mix(hidden_states, block_output, injection)
+        if self._mtp_hidden_buffer is not None:
+            self._mtp_hidden_buffer[: multi_hidden.shape[0]].copy_(multi_hidden)
+        aux = [st["aux"][k] for k in sorted(st["aux"])]
+        st["aux_list"] = aux
+        st["h"] = st["bo"] = st["inj"] = None
+        if aux:
+            return sample_hidden_states, aux
         return sample_hidden_states
 
     def load_weights(self, weights: Iterable[tuple[str, torch.Tensor]]) -> set[str]:

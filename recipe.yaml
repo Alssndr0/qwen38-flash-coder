@@ -32,6 +32,20 @@ env:
   MBX_DEPTH_MODE: "off"   # [coder]
   MBX_PLE_PREFILL_CKPT: "1"   # [coder]
   DFL2_SWA_AS_FULL: "1"   # [coder]
+  MBX_SIDECAR: "1"   # [smooth] layer-sliced prefill (files/mbx_sidecar.py); the policy is the smooth: section below
+  MBX_MOEK: "1"      # [experts] routed experts on the kit's own CUDA kernel (files/mbx_moek.py + .cu, built into
+                     # cache/moek-build on the first boot): prefill ~4.5 % faster, decode steps equal or faster, the
+                     # expert scales 0.4 GB smaller than the image's compressed ones; outputs at the run-to-run level
+                     # (README "The expert layers"). "0" = back to the image's Marlin (the tile below applies then)
+  MBX_MOE_BM: "48"   # [experts] Marlin row tile 48 for the routed experts on prefill batches of >= 256 tokens
+                     # (files/mbx_moe.py): less padding than vLLM's 64, prefill 2-3 % faster, outputs unchanged
+                     # (KL at the run-to-run floor). "0" = vLLM's choice; MBX_MOE_LIVE=<json> adds a live switch
+  # Opt-in, changes prefill outputs slightly (README "Faster prefill"): GDN projections of prefill-size batches on the
+  # MXFP8 originals of the AZ checkpoint (files/mbx_gdn8.py, +2.1 GB). Uncomment the three lines and set lb: 0.0067
+  # in smooth: below. Live switch: cache/mbx-gdn8.json {"min_tokens": 100000000} = off, {"min_tokens": 256} = on.
+  # MBX_GDN8: /models/Qwen3.8-Flash-Next-FP4-Local-AZ
+  # MBX_GDN8_MIN_TOKENS: "256"
+  # MBX_GDN8_LIVE: /cache/mbx-gdn8.json
   DFL2_VOCAB_KEEP: "/vocab_keep.json"   # [coder]
   DFL2_TARGET_HEAD_INT8: "1"   # [coder]
   MBX_INT8_GPTQ: "/cache/gptq_hc_int8_g128.pt"   # [coder]
@@ -70,12 +84,15 @@ env:
 
 vllm:
   prefix-match-unit: 64   # [coder]
+  scheduler-cls: mbx_sched.SmoothScheduler   # [smooth] vLLM's async scheduler + step tracer + prefill pacing / slicing
   served-model-name: Qwen/Qwen3.8-Flash-Next
   engram-config: '{"cpu_offload": false}'
   moe-backend: marlin                           # NVFP4 experts on Marlin with compressed scales
   load-format: mbx                              # our loader (reads only what each rank needs; drafter: 3 of 21 files)
   distributed-executor-backend: mp
-  gpu-memory-utilization: 0.88                  # with kv-cache-memory pinned this does not size the KV pool
+  gpu-memory-utilization: 0.86                  # with kv-cache-memory pinned this does not size the KV pool; it is
+                                                # only vLLM's free-memory check at startup (0.88 failed when the page
+                                                # cache held the model files, 2026-11-03)
   kv-cache-memory: "22000000000"   # [coder] 22G (~1.5M fp8 tokens): leaves room for builds and containers next to the serve
   kv-cache-dtype: fp8
   max-model-len: 262144   # native window, 2026-10-31
@@ -110,6 +127,27 @@ mtp_depth:
   promote: [101, 101]   # [dflash2] fixed depth
   demote: [-1, -1]   # [dflash2] fixed depth
   log: false                                    # true = one log line per decision (depth before → after, the measured rate)
+
+
+# [smooth] What a decoding stream sees when another request arrives. vLLM runs a newcomer's prompt in chunks of up to
+# 6,912 tokens, and every such step streams most of the 4-bit expert weights: the others freeze for 0.3 s (a small
+# turn) to 2.5 s per chunk. mode: slice runs the newcomer's prompt a few of the 48 layers per step right after the
+# normal decode step, sized so the decoding streams keep a gap of about gap_ms between tokens; its first token comes
+# back in the step that finishes the last layer. Exact (outputs as an unsliced prefill). run.sh writes
+# cache/mbx-smooth.json; the serve re-reads it while it runs ("mode": "off" = vLLM's own chunked prefill).
+smooth:
+  mode: slice                                   # slice | off | pace (chunk cap + time share, see files/mbx_sched.py)
+  gap_ms: 220                                   # target gap between a decoding stream's tokens while a prompt prefills
+  gap_ms_busy: 260                              # ... when more prompts wait behind it
+  gap_ms_late: 320                              # ... once a prompt has waited longer than late_s
+  late_s: 4
+  idle_ms: 600                                  # prefill per step when nobody decodes
+  min_tokens: 16                                # smaller prefills ride along in the decode step
+  la: 2.9                                       # the planner's cost of one slice layer: la + lb * tokens (ms), fitted
+  lb: 0.0066                                    # on this kit's slices with the expert kernel (bench/lbfit.py on the
+                                                # "tlog" slice log, 2026-11-03); the image's Marlin needed 2.4 / 0.0071.
+                                                # With MBX_GDN8 on, refit (prefill GDN is cheaper: lb roughly -0.0004)
+  trace: false                                  # true = one JSON line per engine step in cache/steptrace/ (bench/)
 
 
 # Optional front proxy (uncomment the section to use it; absent = vLLM serves the port itself). It keeps long prefills

@@ -4,3 +4,5 @@ logs/
 .release/
 .assets/
 __pycache__/
+bench/results/
+bench/prof/
