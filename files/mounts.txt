@@ -15,3 +15,12 @@ files/mbx_gdn8.py                         /usr/local/lib/python3.12/dist-package
 files/mbx_moe.py                          /usr/local/lib/python3.12/dist-packages/mbx_moe.py
 files/mbx_moek.py                         /usr/local/lib/python3.12/dist-packages/mbx_moek.py
 files/mbx_moek.cu                         /usr/local/lib/python3.12/dist-packages/mbx_moek.cu
+files/v33/vllm/utils/system_utils.py                                   /usr/local/lib/python3.12/dist-packages/vllm/utils/system_utils.py
+files/v33/vllm/distributed/device_communicators/shm_broadcast.py       /usr/local/lib/python3.12/dist-packages/vllm/distributed/device_communicators/shm_broadcast.py
+files/v33/vllm/v1/worker/gpu/warmup.py                                 /usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/warmup.py
+files/v33/vllm/v1/worker/gpu/model_runner.py                           /usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/model_runner.py
+files/v33/vllm/v1/worker/gpu/sample/gumbel.py                          /usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/sample/gumbel.py
+files/v33/vllm/v1/worker/gpu/sample/watermark.py                       /usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/sample/watermark.py
+files/v33/vllm/v1/worker/gpu/spec_decode/rejection_sampler_utils.py    /usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/spec_decode/rejection_sampler_utils.py
+files/v33/vllm/v1/worker/gpu/spec_decode/lilicorr/speculator.py        /usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/spec_decode/lilicorr/speculator.py
+files/v33/vllm/v1/worker/gpu/spec_decode/dflash/speculator.py          /usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/spec_decode/dflash/speculator.py

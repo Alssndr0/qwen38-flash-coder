@@ -93,7 +93,7 @@ vllm:
   gpu-memory-utilization: 0.86                  # with kv-cache-memory pinned this does not size the KV pool; it is
                                                 # only vLLM's free-memory check at startup (0.88 failed when the page
                                                 # cache held the model files, 2026-11-03)
-  kv-cache-memory: "22000000000"   # [coder] 22G (~1.5M fp8 tokens): leaves room for builds and containers next to the serve
+  kv-cache-memory: "22000000000"   # [coder] 22G (742,741 fp8 tokens, 2.8 full contexts): leaves room for builds and containers; use 20G with MBX_GDN8 (+2.1 GB)
   kv-cache-dtype: fp8
   max-model-len: 262144   # native window, 2026-10-31
                                                 # retrieval at 407,552 tokens: @grau_marc). Native: 262144 without hf-overrides
@@ -108,7 +108,7 @@ vllm:
   enable-auto-tool-choice: true
   tool-call-parser: qwen3_xml
   reasoning-parser: qwen3
-  speculative-config: '{"method":"dflash","model":"/dflash2","num_speculative_tokens":7,"rejection_sample_method":"block","draft_sample_method":"probabilistic","attention_backend":"TRITON_ATTN"}'   # [dflash2] block 8 as trained; Triton so the drafter's KV takes the 6624-token block
+  speculative-config: '{"method":"dflash","model":"/dflash2","num_speculative_tokens":7,"disable_eagle_block_drop":true,"rejection_sample_method":"block","draft_sample_method":"probabilistic","attention_backend":"TRITON_ATTN"}'   # [dflash2] block 8 as trained; Triton so the drafter's KV takes the 6624-token block
                                                 # dynamic depth (default): 7 = the deepest a request may draft
   async-scheduling: true
   use-replayssm: true                           # RecoverSSM (vLLM PR 58863): drafts verify off one GDN state and replay

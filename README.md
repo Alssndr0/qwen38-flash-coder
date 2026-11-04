@@ -188,6 +188,15 @@ Release `v4gdnq-2026-11-01`: shard 1 of the checkpoint in three parts, its weigh
 
 The paths in `build/` are the ones of the original workspace, kept as a record.
 
+## Backported from vLLM 0.33.0
+
+Mounted from `files/v33/` on the v5.4 image (vLLM 0.32.0), checked in [bench/DECISIONS.md](bench/DECISIONS.md):
+
+- [#61161](https://github.com/vllm-project/vllm/pull/61161): block verification no longer reuses random draws across rounds. A correctness fix: on the issue's model-free test a token that should appear 50 % of the time appeared 41.7 %, now 50.1 %. No quality change could be measured on real tasks.
+- [#54163](https://github.com/vllm-project/vllm/pull/54163), as `disable_eagle_block_drop` in `recipe.yaml`: DFlash keeps the last prefix-cache block. The next turn recomputes about 115 tokens instead of 182, first token 0.27 s instead of 0.32 s.
+- [#59511](https://github.com/vllm-project/vllm/pull/59511), [#59260](https://github.com/vllm-project/vllm/pull/59260) and the DFlash part of [#63819](https://github.com/vllm-project/vllm/pull/63819): draft context in the CUDA graph, sampling kernels compiled at boot.
+- [#62884](https://github.com/vllm-project/vllm/pull/62884), [#63165](https://github.com/vllm-project/vllm/pull/63165): a startup deadlock and a slow reader memory leak.
+
 ## License
 
 Code: Apache License 2.0 ([LICENSE](LICENSE)), except the files taken from myllmbox's recipe, which stay under their

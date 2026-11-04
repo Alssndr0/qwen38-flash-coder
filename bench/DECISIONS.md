@@ -29,6 +29,60 @@ up.sh (trial recipes in trials/), prof.sh (nsys), ../files/mbx_sched.py (step tr
 
 ## Log (newest first)
 
+### 2026-11-04 12:40 UTC: backport adopted (`bp33`: gdn8k + the backport + KV 20G, live on :8000)
+- Final run on KV 20G (677,205 tokens): no crash, no NVRM errors, min MemAvailable 4.81 GiB (3.75 at 22G). P3 0.27 s, 114 tokens. Agents
+  stream_tps 43.46, total_tps 108.16 (out_tokens 26.8k), TTFT p90 4.27, stall 0.61 %, no gap over 1 s. Prefill sum 44.5 s (base 44.7).
+- Quality: langcheck 0 CJK and 0 wrong language in 400; empty in thinking mode 18 / 160 (earlier configs 13-21, budget cuts). Replay 20
+  requests: tool-valid 1.000, 88.79 tok/s, 3.710 tok/step. Q6 greedy over three patched runs 453 / 454 / 449 vs base 454 (worst pair: only
+  base 7, only bp33 2, McNemar p 0.18; the kit's floor is 448). Q6 sampled 446 vs 446.
+- Pass rule, one borderline: agents total_tps -5.0 / -1.4 / -5.3 % against a 5 % limit, with stream_tps -0.3 / +5.6 / +4.7 %: total_tps
+  follows out_tokens here (fewer tokens, less overlap), so it is read as no loss. No speed gain is claimed for decode: tok/s differences are
+  within the bench's run-to-run range. The measured gain is the next-turn TTFT.
+- Open: the 10:15 crash stays unexplained (once in four runs, none on 20G). Whether the patches contributed was not tested.
+- Defaults: recipe.yaml has the backport and stays at 22G without GDN8. `bench/up.sh bp33` boots the live flavor.
+
+### 2026-11-04 11:40 UTC: backport results so far, and a 20G KV pool for this flavor
+- calib control `nospec` (no drafting, 102.8k tokens): top-1 excess +0.34 points, z +4.5, same pattern as bp33-large (+0.43, z
+  +5.9). So the excess is an offset of the test or of sampling in general, not block verification. Correction: an interim message
+  to the user called base33's +3.4 proof of the bug on the real model; it is not. calib cannot see #61161 at this
+  resolution (with vs without drafting differ by 0.09 +- ~0.13 points). The bug stands on the model-free script only.
+- bp33 vs base33: P3 next turn TTFT 0.32 -> 0.27 / 0.28 s, recomputed 182 -> 118 / 114 tokens (the kept prefix block). Q6 greedy 454
+  -> 453 / 454; Q6 sampled 446.0 -> 446.0 (CI -7.5 / +7.5). Agents stream_tps 41.51 -> 41.38 / 43.82, total_tps 114.2 -> 108.5 /
+  112.7 (out_tokens 32.5k -> 24.9k / 27.7k, the replay's own range is 25-34k), TTFT p90 4.75 -> 4.63 / 4.55, tokens per delivery
+  3.60 -> 3.73 / 3.85, no gap over 1 s. Prefill sum over the 4 sizes 44.7 s -> 44.9 / 45.6. Exactness at the A/A floor.
+- One crash: serve killed at 10:15:37 (exit 137, NVRM out of memory) at the start of the 16-stream Q6, 21 min after boot. Not
+  repeated: fresh boot + Q6 (min MemAvailable 4.30 GiB), and the same sequence again (min 3.75 GiB, 47 min up, no new NVRM errors).
+  Cause not established; the patches were not A/B tested for it. Yesterday's gdn8k boot logged 32 NVRM errors in its first hour with
+  none of these patches. Margin is thin in this flavor (GDN8 +2.1 GB on the same 22G pool). Added: `bp33` KV 22G -> 20G
+  (exact, ~675k tokens, 2.6 contexts), then the same sequence + langcheck.
+
+### 2026-11-04 11:14 UTC: calib control (pre-registered before running)
+- calib top-1 excess: base33 +0.44 points (32.6k tokens, z +3.4); bp33 +0.31 (34.0k, z +2.3); bp33-large +0.43 (103k, z +5.9). So the
+  fix did not shrink it, although the model-free script goes from 0.417 to 0.500. Control: same calib on `nospec` (bp33 without
+  speculative-config, every token sampled directly). Reading: control z within +-2: a real bias remains in the speculative path.
+  Control near +0.4: the test has a flaw (reported logprobs vs sampled distribution), and calib says nothing about #61161.
+
+### 2026-11-04 09:40 UTC: pre-registration, backport from vLLM 0.33.0 (the user: "get the improvements from that new image and apply them to what we have today")
+- Base: the live trial `gdn8k` on v5.4 (vLLM 0.32.0). Candidate `bp33` = gdn8k + mounted files in files/v33/:
+  - #61161, block verification reuses random draws across rounds (V2 runner, block, T > 0: our exact config). Checked
+    on this GPU with the issue's model-free script, 200k requests, P(token 2 = 0), exact 0.5: unpatched 0.4174, then
+    0.4854 / 0.4688 / 0.4650; patched 0.5006, 0.4985 / 0.4976 / 0.4990.
+  - #59511, DFlash context combine and anchor in the draft graph. #59260 + the DFlash hunk of #63819, warmup gaps
+    (the first-use gap logged here). #62884, libgomp fork deadlock. #63165, SHM reader memory growth (~41 B per message).
+  - #54163 by config, no code: `disable_eagle_block_drop` in speculative-config (DFlash KV does not depend on the
+    next token, so the trailing prefix-cache block need not be dropped).
+- Left out, with reasons: #61355 (non-speculative decode on SM100 family only, not our path); #62784 (conflicts in
+  dp_utils, ~2 ms of a ~200 ms prefill-only step); #59973, #61601, #60050 (equivalent already here); #61213, #61996 (no
+  masked-to-under-k case here; ~7 empty launches per step); #53987 FLy (lossy); #54448 XPress (no head for this model);
+  #61343 (C++, not mountable).
+- Measures, base on the live serve, then bp33 (`bp33_gates.sh`): calib.py (new: observed vs expected rank frequencies
+  on the real model), exact_boot x2 (floor) and across, run_set quick, P3 nextturn, Q6 greedy, Q6 sampled at the serve's
+  real sampling (T 1, top-p 0.95, top-k 20; 2 samples per task).
+- Pass rule: speed: capacity, agents total_tps and prefill not more than 5 % worse, TTFT p90 not worse by more than
+  10 %. Exactness: greedy divergence and KL at the base's own A/A floor (#61161 does not touch greedy). Quality: Q6
+  greedy unchanged, Q6 sampled not more than 2 points below base, tool arguments valid, no CJK. calib: |z| of bp33
+  not above base's. Fail on any one: drop the responsible patch, not the set.
+
 ### 2026-11-03 17:05 UTC: trial `gdn8k` up for the user (expert kernel + MXFP8 GDN prefill, user: "put up the best
 version with the FP8 variant so I can test it")
 - bench/trials/gdn8k.yaml = recipe.yaml + MBX_GDN8 (live file cache/mbx-gdn8.json {"min_tokens": 256}; 100000000 =
