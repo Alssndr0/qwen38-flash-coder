@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Profile one scenario on a serve booted under nsys (prof.sh): warm up, POST /start_profile, run, POST /stop_profile.
-usage: prof.py prefill10k | mixed10k | decode4"""
+usage: prof.py prefill10k | mixed10k | decode1 | decode4"""
 import http.client, json, sys, threading, time, uuid
 sys.path.insert(0, __import__("os").path.dirname(__file__))
 import conc
@@ -26,9 +26,9 @@ for what in whats:
       conc.stream(conc.body_of(fresh, 1, 1, nonce=uuid.uuid4().hex), r)
       time.sleep(0.5); post("/stop_profile")
       print("ttft", r["t_first"] - r["t_send"], r.get("usage"))
-  elif what in ("mixed10k", "decode4"):
+  elif what in ("mixed10k", "decode1", "decode4"):
       stop = threading.Event()
-      bg = [{} for _ in range(3 if what == "mixed10k" else 4)]
+      bg = [{} for _ in range({"mixed10k": 3, "decode1": 1, "decode4": 4}[what])]
       for i, b in enumerate(bg):
           conc.start(conc.body_of(rows[conc.BG_IDS[i]], 4000, 4000), b, stop)
       conc.wait_first(bg); time.sleep(3)

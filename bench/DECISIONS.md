@@ -29,6 +29,19 @@ up.sh (trial recipes in trials/), prof.sh (nsys), ../files/mbx_sched.py (step tr
 
 ## Log (newest first)
 
+### 2026-11-04 13:40 UTC: decode analysis (the user: decode must get faster)
+- No regression from the backport: decode step p50 x1-x4 41.6-41.9 / 57.2-58.5 / 68.7-70.0 / 82.9-83.7 ms (unpatched moekc 42.1-43.1 / 56.2-58.0 /
+  70.3-71.0 / 80.1-83.2). Agents total_tps moved with out_tokens; per-stream decode did not fall.
+- Profile (nsys, bp33, prof/bp33-81.*), ms per step at 1 / 4 streams: routed experts 16.3 / 48.4, shared expert MXFP8 6.0 / 7.2, HC INT8 4.3 / 4.5, GDN
+  qkvz and other Marlin 6.4 / 6.8, GDN out 1.6 / 1.9, GDN verify + commit 2.5 / 7.8, QSA 1.9 / 3.2, head INT8 1.7 / 1.7, MoE routing 2.1 / 1.5,
+  router BF16 1.2. Dense layers cost the same at any M (weight reads, memory-bound); experts grow with tokens: ~1.9 ms per verified token at x1.
+- Clock (step p50 at 2200 / 1800 MHz): x1 41.6 / 45.0, x2 57.9 / 60.7, x3 70.0 / 72.4, x4 83.7 / 83.5. Clock-bound share 37 / 22 / 15 / 0 %; projected at
+  3003 MHz +11 / +6 / +4 / 0 %. Not tested above the user's 2200 cap. GPU ~50 C under this load.
+- Ruled out: memory compaction before boot (x1 41.9); verify depth (with acceptance 0.80 .61 .48 .38 .31 .26 .21 and 1.9 ms per token, K=7 97.0 tok/s, K=6
+  96.4, K=5 94.6); 4 experts (NLL +0.054); the public DSpark drafter (behind MTP on its own card, DFlash2 ahead of MTP on its).
+- Ranked: (1) DFlash2 fine-tuned on agent sessions against our exact checkpoint (SpecForge model + our capture; exact; all concurrency; a DSpark run gained
+  37 % from a low base; ours untested); (2) clock cap, the user's call; (3) shared expert and HC, own kernels or GPTQ 4-bit, est. 3-7 % at x1, 2-3 % at x4.
+
 ### 2026-11-04 12:40 UTC: backport adopted (`bp33`: gdn8k + the backport + KV 20G, live on :8000)
 - Final run on KV 20G (677,205 tokens): no crash, no NVRM errors, min MemAvailable 4.81 GiB (3.75 at 22G). P3 0.27 s, 114 tokens. Agents
   stream_tps 43.46, total_tps 108.16 (out_tokens 26.8k), TTFT p90 4.27, stall 0.61 %, no gap over 1 s. Prefill sum 44.5 s (base 44.7).
