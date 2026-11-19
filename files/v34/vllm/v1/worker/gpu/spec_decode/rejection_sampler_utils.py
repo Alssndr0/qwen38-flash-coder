@@ -1329,5 +1329,8 @@ def rejection_sample(
         expanded_idx_mapping,
         temperature,
         PADDED_RESAMPLE_NUM_BLOCKS=padded_resample_num_blocks,
+        # vLLM #66048: the kernel reads and updates num_sampled in place. Multiple
+        # warps can observe the increment before loading the original resampling index.
+        num_warps=1,
     )
     return sampled, num_sampled

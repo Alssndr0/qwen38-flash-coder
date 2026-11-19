@@ -21,6 +21,8 @@ files/v33/vllm/v1/worker/gpu/warmup.py                                 /usr/loca
 files/v33/vllm/v1/worker/gpu/model_runner.py                           /usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/model_runner.py
 files/v33/vllm/v1/worker/gpu/sample/gumbel.py                          /usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/sample/gumbel.py
 files/v33/vllm/v1/worker/gpu/sample/watermark.py                       /usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/sample/watermark.py
-files/v33/vllm/v1/worker/gpu/spec_decode/rejection_sampler_utils.py    /usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/spec_decode/rejection_sampler_utils.py
+files/v34/vllm/v1/worker/gpu/spec_decode/rejection_sampler_utils.py   /usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/spec_decode/rejection_sampler_utils.py
 files/v33/vllm/v1/worker/gpu/spec_decode/lilicorr/speculator.py        /usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/spec_decode/lilicorr/speculator.py
 files/v33/vllm/v1/worker/gpu/spec_decode/dflash/speculator.py          /usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/spec_decode/dflash/speculator.py
+files/v34/vllm/models/qwen4_exp/nvidia/qsa.py                         /usr/local/lib/python3.12/dist-packages/vllm/models/qwen4_exp/nvidia/qsa.py
+files/v34/vllm/parser/qwen3.py                                        /usr/local/lib/python3.12/dist-packages/vllm/parser/qwen3.py

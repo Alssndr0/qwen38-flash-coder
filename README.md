@@ -197,6 +197,20 @@ Mounted from `files/v33/` on the v5.4 image (vLLM 0.32.0), checked in [bench/DEC
 - [#59511](https://github.com/vllm-project/vllm/pull/59511), [#59260](https://github.com/vllm-project/vllm/pull/59260) and the DFlash part of [#63819](https://github.com/vllm-project/vllm/pull/63819): draft context in the CUDA graph, sampling kernels compiled at boot.
 - [#62884](https://github.com/vllm-project/vllm/pull/62884), [#63165](https://github.com/vllm-project/vllm/pull/63165): a startup deadlock and a slow reader memory leak.
 
+## Backported from vLLM 0.34.0
+
+Mounted from `files/v34/` (the QSA change is in `files/v54/model.py`), checked in [bench/DECISIONS.md](bench/DECISIONS.md).
+No speed change; outputs at the run-to-run level:
+
+- [#66048](https://github.com/vllm-project/vllm/pull/66048): a race between warps when a rejected draft is resampled, which
+  can crash the serve or repeat a token. `files/v34/.../rejection_sampler_utils.py` is the 0.33 file (#61161) plus this fix.
+- [#65619](https://github.com/vllm-project/vllm/pull/65619): the 12 QSA layers share one top-k buffer. 0.7 GB less memory.
+- [#64675](https://github.com/vllm-project/vllm/pull/64675), the converter part: the `qwen3_xml` tool parser no longer
+  re-parses every closed parameter on each streamed step (a looping call: 395 ms of parser time down to 4 ms). Same output
+  on 113,113 streamed conversions of recorded calls (`bench/parser34_test.py`).
+
+`run.sh` takes `MOUNTS=files/mounts-X.txt` for a trial with its own mount list.
+
 ## License
 
 Code: Apache License 2.0 ([LICENSE](LICENSE)), except the files taken from myllmbox's recipe, which stay under their

@@ -29,6 +29,83 @@ up.sh (trial recipes in trials/), prof.sh (nsys), ../files/mbx_sched.py (step tr
 
 ## Log (newest first)
 
+### 2026-11-19 09:40 UTC: 0.34 backport, outcome: #66048 + #65619 + #64675 adopted (kit default, live on :8000); #62560 dropped
+- Exactness (exact_boot greedy, 6 agent prompts; prompt-position KL is ~1.15 within every arm too, so only the greedy part is
+  read): KL per step before the first divergence, base34 A/A 2.12e-2, bp34 A/A 7.81e-2, across 2.05e-2 / 5.39e-2; adopted boot
+  vs base34 2.36e-2 / 2.42e-2, divergence points [1, 58, 50, 7, 2, 85] vs base A/A [1, 58, 36, 3, 1, 85]. Run-to-run level.
+- Speed, run_set quick, base34 -> bp34: agents total_tps 107.45 -> 108.88, stream_tps 40.68 -> 41.49, TTFT p90 4.66 -> 3.38 s,
+  stall 0.94 -> 0.55 %, max gap 792 -> 364 ms; prefill alone within 0.5 %; stall scenario equal. Capacity per-stream tok/s
+  +24 / -15 / -4.6 / -0.8 % at c=1..4 is acceptance: tokens per delivery 4.92 -> 6.35 and 5.88 -> 4.84 at c=1 / 2. Step time
+  (delivery gap p50) 41.6 / 59.0 / 70.8 / 84.7 -> 43.2 / 57.0 / 69.9 / 83.3 ms; at equal tokens per delivery c=1 is -0.4 to
+  +0.8 ms and c=2 -1.4 to -2.9 ms (no patch can do either: cross-boot noise). The c=2 capacity line misses the 5 % rule by the
+  letter; read as no loss (acceptance), like bp33's total_tps.
+- Memory (nvidia-smi, VLLM::Worker): boot base34 96,161 MiB, bp34 95,437, bp34 without the post-capture warm-up 95,435, adopted
+  95,435 (#65619: -726 MiB, 11 x 67 MB expected). The decode ramp (1..16 streams x 2) grows nothing in any arm, so the sampler
+  growth #62560 fixes upstream does not happen here. run_set quick grows the worker: base34 +5,096, bp34nw +3,560, bp34 +1,868
+  MiB; a second prefill pass adds 0 (a plateau from large fresh prefills, not a leak). base34 vs bp34nw differ by 1.5 GB with no
+  relevant change, so the warm-up's 1.7 GB is within single-run spread. #62560 dropped by the rule (it cuts no growth it
+  targets); a real ~1.5-3 GB working-set effect would need repeats. Note for the OOM history: a fresh boot sits ~5 GB below its
+  working set after long fresh prompts; the user's own 27 h old serve was still at the boot value (cache-hit traffic).
+- Parser in the serve: a streamed `write` tool call parses (filePath + 9-line content, 11 argument deltas). Typical calls
+  (348 recorded, delivered 10-20 chars at a time): parser CPU per whole call median 78 -> 48 us, p90 1.0 -> 0.5 ms, max
+  27 -> 14 ms. Not user-visible (a call takes the model 1-3 s, on the GPU, in parallel); the gain is robustness against a
+  looping call, not speed.
+- Files: files/v34/ (rejection_sampler_utils.py = the 0.33 file + #66048, moved from files/v33/; qsa.py; parser/qwen3.py),
+  files/v54/model.py (+ the shared buffer pool), mounts.txt. Tools: memramp.py, parser34_test.py, bp34_gates.sh, run_bp34*.sh
+  (they used files/mounts-bp34.txt, removed with the dropped worker file). Committed and pushed 2026-11-19.
+
+### 2026-11-19: pre-registration, backport from vLLM 0.34.0 (the user: "Yes proceed" to the four fixes below)
+- Base `base34` = the kit default (./run.sh, KV 22G, no GDN8), freshly booted. Candidate `bp34` = the same recipe with
+  `MOUNTS=files/mounts-bp34.txt` (run.sh now takes MOUNTS; default unchanged), five files in files/v34/:
+  - #66048: `num_warps=1` on `_insert_resampled_kernel` (copy of files/v33 rejection_sampler_utils.py).
+  - #62560, adapted: after capture_model, warmup_kernels runs once more (gpu_worker.py from the image). Upstream re-warms the
+    plain sampler at max_num_seqs rows, which misses our verify path (16 x 8 fp32 logits rows, 127 MB, never chunked: the limit
+    is 1,081 rows at vocab 248,320); warmup_kernels already runs 16 requests x 7 drafts at the warm-up sampling params, but
+    before capture, whose empty_cache drops its blocks (boot log: capture "took -0.58 GiB"). MBX_POST_CAPTURE_WARMUP=0 = off.
+  - #65619: the 12 QSA layers share one top-k buffer (8192 x 2052 int32, 67 MB each, ~0.74 GB saved); qsa.py from the image
+    + files/v54/model.py. Safe here: each layer writes and reads its selection within its own call, no side streams, no MTP.
+  - #64675, converter part (0.32 has no value extender): files/v34/vllm/parser/qwen3.py. Checked before boot
+    (bench/parser34_test.py, CPU): 0 mismatches vs the image's converter over 113,113 streamed conversions (348 unique recorded
+    tool calls + 8 edge cases, every prefix and 1-12 char chunks, one cache across several calls). Cost, streamed every 16
+    chars: 400-param loop 395 -> 4 ms, 200 params 175 -> 7 ms, one 70K-char file write 17.2 -> 8.8 s (the open value is still
+    re-scanned; upstream's value extender is the rest).
+- Measures per arm, right after its boot, in this order (bench/bp34_gates.sh): memramp (worker memory from nvidia-smi at boot,
+  then 1 / 2 / 4 / 8 / 16 streams x 2 ramps, real sampling, new tool bench/memramp.py), exact_boot x2, run_set quick, worker
+  memory after. Smoke on the 27 h old live serve: 96,161 MiB, no growth over the ramp (already grown).
+- Pass rule (as bp33): speed: capacity, agents total_tps and prefill not more than 5 % worse, TTFT p90 not worse by more than
+  10 %. Exactness: greedy divergence and KL across arms at base34's own A/A floor. Memory: #65619 shows as lower memory at
+  boot; #62560 must cut growth over ramp 1 (bp34 end vs base34 end, from boot); if base34 grows less than 0.2 GB over the ramp
+  and run_set, #62560 has nothing to fix and is dropped. Fail on any one: drop the responsible patch, not the set. All exact or
+  no output change, so no Q6 unless exactness fails.
+
+### 2026-11-19: vLLM 0.34.0 review (we run 0.32.0 = myllmbox v5.4 + files/v33; myllmbox has no newer image, last tag v5.4 2026-10-27)
+- No decode speed gain for this serve. Applies, exact or reliability, small mountable patches:
+  - #66048: `_insert_resampled_kernel` reads `num_sampled`, stores +1, launches with 4 warps: cross-warp race (reported on 0.32.0,
+    crash at an out-of-range index). Our files/v33 copy has it, and it runs on every sampled step (43 / 43 in prof/bp33-81.2). By
+    the code, a late warp also stores the same token at num_sampled + 1 and the count + 2 (a repeated token) when it does not crash.
+    Fix: num_warps=1. Rare; no cost.
+  - #62560 (+ its prerequisite #57926, in 0.33.0, not in our backport): the worker frees the sampler's cached fp32 logits blocks at
+    capture_model's empty_cache, so memory grows each time a larger batch first arrives (Qwen3-4B: +1.77 GB; peak -1.6 GB with the
+    fix). Hypothesis to test, not established: the 2026-11-04 10:15 NVRM kill came at the start of the first 16-stream run.
+  - #65619: one QSA top-k buffer for all 12 QSA layers instead of one each (8192 x 2048 int32 = 64 MiB per layer here): about
+    0.7 GB more headroom (KV is pinned, so it does not grow the pool).
+  - #64675: our `qwen3_xml` is Qwen3EngineToolParser with `_qwen3_arg_converter`; closed parameters were re-parsed every streamed
+    step (a looping call saturated the API server and failed /health upstream). Not seen in our evals.
+- Comes with an upgrade, not worth a backport alone: #58868 (prefault mmap pages on integrated GPUs: upstream Flash-Next NVMe load
+  475 -> ~50 s; ours already loads in 124 s, boot ~4.5 min, gain unknown); #65466 / #65773 (we run the mp executor; moves admission
+  work off the wait, a few ms of TTFT); #62702 / #65300 / #65831 (per-request CPU on 100k-token prompts, a few ms); #62748 (the main
+  part is already in our runner).
+- Does not apply: #59958 PLE disk offload (the image already reads the table from NVMe, async; upstream's costs -3.5 % decode,
+  +11 % TTFT); #65874 fused GDN MTP kernel (our verify runs `_gdn_recoverssm_verify_kernel` / `_commit_gdn_state_kernel`);
+  #64425 / #64999 / #64509 / #64723 / #51012 (Qwen3.5 model code); #66064 (GDN prefill gather/scatter, ~0.1 % of our expert-bound
+  prefill); #65100 (resample kernel is 24 us per step here); #62956 (GLM-only SM121 GEMM plans); #65812 (checkpoint has no KV
+  scales); #62318, #60490, #64820, #63761 (load layouts / >131k-token steps); #64059; #65033 (Mamba2); #63382 / #61755 (fused
+  act+quant kernel not on our path); #65198 (drafter KV already fp8).
+- Larger lead, not a backport: adaptive verification (per-request verify depth) is already in the 0.32 image but off here. 0.34
+  fixes its mid-serving torch.compile stalls (#63421) and estimator precision (#65229); on GDN it needed graph changes (#60229, GLM)
+  that our RecoverSSM path would also need. Upstream gain +6.5 / +12.7 % at depth 4 / 5, mostly at large batches.
+- Side note from the profile: `_topk_topp_kernel` is 371 us per step at x1 (~0.9 %), outside this release.
+
 ### 2026-11-04 13:40 UTC: decode analysis (the user: decode must get faster)
 - No regression from the backport: decode step p50 x1-x4 41.6-41.9 / 57.2-58.5 / 68.7-70.0 / 82.9-83.7 ms (unpatched moekc 42.1-43.1 / 56.2-58.0 /
   70.3-71.0 / 80.1-83.2). Agents total_tps moved with out_tokens; per-stream decode did not fall.

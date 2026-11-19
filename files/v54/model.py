@@ -216,6 +216,7 @@ class Qwen4ExpDecoderLayer(nn.Module):
         vllm_config: VllmConfig,
         layer_type: str,
         prefix: str = "",
+        topk_buffer_pool: dict | None = None,
     ) -> None:
         super().__init__()
         config: Qwen4ExpTextConfig = vllm_config.model_config.hf_text_config
@@ -272,6 +273,7 @@ class Qwen4ExpDecoderLayer(nn.Module):
                     layer_id=self.layer_idx,
                     quant_config=quant_config,
                     prefix=f"{prefix}.self_attn",
+                    topk_buffer_pool=topk_buffer_pool,
                     reduce_results=not self.use_hc_sequence_parallel,
                 )
         else:
@@ -452,12 +454,16 @@ class Qwen4ExpModel(nn.Module, EagleModelMixin):
         )
         self.embed_tokens = VocabParallelEmbedding(self.vocab_size, config.hidden_size)
 
+        # [kit] vLLM #65619: the QSA layers share one top-k selection buffer.
+        topk_buffer_pool: dict = {}
+
         def get_layer(prefix: str) -> Qwen4ExpDecoderLayer:
             layer_idx = extract_layer_index(prefix)
             return Qwen4ExpDecoderLayer(
                 vllm_config,
                 layer_type=config.layer_types[layer_idx],
                 prefix=prefix,
+                topk_buffer_pool=topk_buffer_pool,
             )
 
         self.start_layer, self.end_layer, self.layers = make_layers(

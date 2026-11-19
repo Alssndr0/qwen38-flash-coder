@@ -79,10 +79,10 @@ fi
 [ -n "${PREPARE_ONLY:-}" ] && { echo "✓ prepared (PREPARE_ONLY): ./run.sh serves it"; exit 0; }
 [ -n "${DRY_RUN:-}" ] && [ ! -f "$W/.complete" ] && { echo "· (dry run) $W is not assembled yet: PREPARE_ONLY=1 ./run.sh first"; exit 0; }
 
-# 6. serve: the files in files/mounts.txt go over the image's own copies, read-only
+# 6. serve: the files in files/mounts.txt (or $MOUNTS) go over the image's own copies, read-only
 EXTRA=""
 while read -r src dst; do
   case "$src" in ''|'#'*) continue;; esac
   EXTRA+=" -v $K/$src:$dst:ro"
-done < files/mounts.txt
+done < "${MOUNTS:-files/mounts.txt}"   # MOUNTS=files/mounts-X.txt: a trial's own list
 RECIPE="${RECIPE:-recipe.yaml}" EXTRA_DOCKER="$EXTRA ${EXTRA_DOCKER:-}" exec ./serve.sh
